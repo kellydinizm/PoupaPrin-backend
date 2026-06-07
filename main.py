@@ -1,8 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from datetime import datetime, timedelta
@@ -10,7 +9,7 @@ from typing import Any
 import psycopg2
 import psycopg2.extras
 import json
-import os
+import secrets
 
 
 class Settings(BaseSettings):
@@ -26,8 +25,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2 = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 app = FastAPI(title="PoupaPrin API")
@@ -103,12 +100,10 @@ class TokenResponse(BaseModel):
 
 @app.post("/auth/login", response_model=TokenResponse)
 def login(form: OAuth2PasswordRequestForm = Depends()):
-    if form.username != settings.usuario_email:
+    email_ok = secrets.compare_digest(form.username, settings.usuario_email)
+    senha_ok = secrets.compare_digest(form.password, settings.usuario_senha)
+    if not (email_ok and senha_ok):
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
-    if not pwd_ctx.verify(form.password, pwd_ctx.hash(settings.usuario_senha)):
-        # Comparação direta para usuário único
-        if form.password != settings.usuario_senha:
-            raise HTTPException(status_code=401, detail="Credenciais inválidas")
     return TokenResponse(access_token=criar_token(form.username))
 
 
