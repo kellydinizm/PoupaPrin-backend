@@ -44,20 +44,33 @@ app.add_middleware(
 # ─── Banco ────────────────────────────────────────────────────────────────────
 
 def get_conn():
-    return psycopg2.connect(settings.database_url, cursor_factory=psycopg2.extras.RealDictCursor)
+    return psycopg2.connect(
+        settings.database_url,
+        cursor_factory=psycopg2.extras.RealDictCursor,
+        connect_timeout=10,
+    )
 
 
 def init_db():
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS dados (
-                    id SERIAL PRIMARY KEY,
-                    payload JSONB NOT NULL,
-                    atualizado_em TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-        conn.commit()
+    import time
+    for tentativa in range(10):
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS dados (
+                            id SERIAL PRIMARY KEY,
+                            payload JSONB NOT NULL,
+                            atualizado_em TIMESTAMPTZ DEFAULT NOW()
+                        )
+                    """)
+                conn.commit()
+            print("Banco inicializado com sucesso.")
+            return
+        except Exception as e:
+            print(f"Tentativa {tentativa + 1}/10 — aguardando banco: {e}")
+            time.sleep(3)
+    raise RuntimeError("Não foi possível conectar ao banco após 10 tentativas.")
 
 
 @app.on_event("startup")
